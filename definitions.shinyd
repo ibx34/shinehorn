@@ -1,0 +1,8 @@
+// Defaults can be set using `= ...` after the key name.
+(#define port = 8080 \Int)
+
+// Optional keys can be made using the `@opt` derivative
+(#define @opt max_allowed_jobs \Int)
+
+// If none of the aforementioned are present then the key is required
+(#define database_url \String)

@@ -1,0 +1,11 @@
+(executable
+ (public_name shinehorn)
+ (name main)
+ (libraries llvm llvm.analysis llvm.target shinehorn)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord)))
+
+(env
+ (dev
+  (flags
+   (:standard -w -69))))

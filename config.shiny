@@ -1,0 +1,4 @@
+(#include "./definitions.shinyd")
+(#set database_url = "postgres...")
+(#set port = 8080)
+(#set max_allowed_jobs = 100)

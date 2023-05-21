@@ -3,6 +3,7 @@ let llvm_void = Llvm.void_type context
 let llvm_i32 = Llvm.i32_type context
 let llvm_i8 = Llvm.i8_type context *)
 
+exception ParserHitTheEnd;;
 type std_types = String [@@deriving show];;
 type expression_literals = StringLiteral of string [@@deriving show];;
 type expression = 
@@ -43,33 +44,34 @@ class parser tokens = object (self)
   val ret = ([] : parser_result list)
   val mutable idx = 0
 
+  method expect expected = 
+    ignore(self#advance);
+    self#expect_tty expected
+
   method expect_tty expected = 
-    let exception AllOutOfTokens in
     let exception ExpectedSomethingElse in
-      if idx + 1 >= List.length tokens then
-        raise AllOutOfTokens
-      else
-        let peeked = List.nth tokens (idx + 1) in
-          if peeked.ty != expected then
-            raise ExpectedSomethingElse
-          else
-            self#advance;
+    let peeked = List.nth tokens idx in
+      if peeked.ty != expected then
+        let _ = print_endline (show_lexer_token peeked) in
+          raise ExpectedSomethingElse
 
   method peek = 
     let exception AllOutOfTokens in
-      if idx + 1 >= List.length(tokens) then
-        raise AllOutOfTokens
+      if idx + 1 == List.length(tokens) then
+        raise ParserHitTheEnd
       else
-        List.nth tokens (idx + 1)
+        if idx + 1 >= List.length(tokens) then
+          raise AllOutOfTokens
+        else
+          List.nth tokens (idx + 1)
 
   method advance = 
-    let exception AllOutOfTokens2 in
-      if idx + 1 >= List.length(tokens) then
-        raise AllOutOfTokens2
-      else
+    if idx + 1 >= List.length(tokens) then
+      raise ParserHitTheEnd
+    else
+      let nth_tok = List.nth tokens idx in
         idx <- idx + 1;
-        let nth_tok = List.nth tokens idx in
-          nth_tok
+        nth_tok
 
   method parse_all = 
     while idx != List.length(tokens) do
@@ -79,15 +81,16 @@ class parser tokens = object (self)
   method parse_block block =
     if idx < List.length tokens then
       let current = List.nth tokens idx in
-        block := Result.get_ok self#parse_expr :: !block;
+        block := Result.get_ok (self#parse_expr) :: !block;
         if current.ty == TyCloseParen then
           self#parse_block block;
 
   method parse_expr =
-    let next = self#advance in
+    let exception UnknownToken in
+    let next = self#peek in
       match next.ty with
         | TyBackSlash -> 
-          print_endline "\nExpression Backslash (literal)\n";
+          ignore(self#advance);
           Ok (Identifier self#parse_literal.literal_value)
         | TyString str ->
           ignore(self#advance);
@@ -97,37 +100,34 @@ class parser tokens = object (self)
           let f_args = ref ([]: expression list) in 
             while idx < List.length tokens do
               let expr = Result.get_ok self#parse_expr in
+                ignore(self#advance);
                 f_args := expr :: !f_args;
             done;
+            ignore(self#advance);
             Ok (FunctionCall { f_name = f_name.literal_value; f_args = Some !f_args })
         | TyOpenParan -> let block = ref ([]: expression list) in
             self#parse_block block;
             ignore(self#advance);
             Ok (Block !block)
-        | TyLiteral -> Ok (Identifier self#parse_literal.literal_value)
-        | _ -> 
-          Error "MEOW";
+        | TyLiteral -> 
+          Ok (Identifier self#parse_literal.literal_value)
+        | TyEof -> print_endline("1"); Error ParserHitTheEnd;
+        | _ -> print_endline (Printf.sprintf "2 = %s" (show_lexer_token next)); Error UnknownToken;
 
   method parse_literal =
     let exception ExpectedLiteral in
-    let supposeed_to_be_literal = self#advance in
-      print_endline( show_lexer_token supposeed_to_be_literal);
+    let supposeed_to_be_literal = self#peek in
       if supposeed_to_be_literal.ty != TyLiteral then
         raise ExpectedLiteral
       else
         match supposeed_to_be_literal.tok_literal with
-        | Some lit -> lit
+        | Some lit -> 
+          ignore(self#advance);
+          lit
         | _ -> raise ExpectedLiteral
 
   method parse_definition = 
-    let exception ExpectedLiteral in
-    let supposeed_to_be_literal = self#advance in
-      if supposeed_to_be_literal.ty != TyLiteral then
-        raise ExpectedLiteral
-      else
-        let lhs = match supposeed_to_be_literal.tok_literal with
-        | Some lit -> lit
-        | _ -> raise ExpectedLiteral in
+    let lhs = self#parse_literal in
     print_endline (Printf.sprintf "Literal value of definition is %s" lhs.literal_value);
     let def_types = ref ([] : expression list) in
       while List.mem self#peek.ty [TyFatArrow] == false do
@@ -135,13 +135,14 @@ class parser tokens = object (self)
         def_types := Result.get_ok expr :: !def_types;
         ()
       done;
+      
     print_endline (Printf.sprintf "\n%s type list is %d long\n" lhs.literal_value (List.length !def_types));
     (* if List.length !def_types > 1 then
       Curry *)
-    ignore(self#expect_tty TyFatArrow);
+    ignore(self#expect TyFatArrow);
     print_endline (Printf.sprintf "\nValue of definition %s is %s" lhs.literal_value (show_expression (Result.get_ok self#parse_expr)));
-
-    (*expect a hashtag*)
+    ignore(self#expect TyCloseParen);
+    ignore(self#advance);
 
   (*Starts parsing under the assumption the current token is a hashtag*)
   method parse_derective =
@@ -306,8 +307,8 @@ let () =
     lexer_instance#lex_all;
     (*print_int (List.length lexer_instance#get_ret);;*)
     let ret = lexer_instance#get_ret in
-    let whatever (lt:lexer_token) = print_endline (show_lexer_token lt); true in
-    let _ = List.for_all whatever (List.rev ret) in
+    (* let whatever (lt:lexer_token) = print_endline (show_lexer_token lt); true in
+    let _ = List.for_all whatever (List.rev ret) in *)
     let parser = new parser (List.rev ret) in
       parser#parse_all;
 

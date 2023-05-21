@@ -1,1 +1,1 @@
-(to_print \String \Int \String = "Hello, World!")
+(print_this \String \String => x)

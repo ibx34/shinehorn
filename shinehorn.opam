@@ -10,7 +10,6 @@ depends: [
   "dune" {>= "3.7"}
   "llvm"
   "odoc" {with-doc}
-  "ppx_deriving"
 ]
 build: [
   ["dune" "subst"] {dev}

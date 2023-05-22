@@ -7,7 +7,8 @@ exception ParserHitTheEnd;;
 type std_types = String [@@deriving show];;
 type expression_literals = StringLiteral of string [@@deriving show];;
 type expression = 
-  Definition of { 
+  Empty
+  | Definition of { 
       d_name: string;
       d_type_list: std_types list option;
       d_args_list: string list option; 
@@ -39,6 +40,7 @@ type lexer_token = {
 let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 let is_digit = function '0' .. '9' -> true | _ -> false
 
+(*The parse function is parse_expr don't let the name confuse you.*)
 class parser tokens = object (self)
   val tokens = (tokens : lexer_token list)
   val ret = ([] : parser_result list)
@@ -57,13 +59,16 @@ class parser tokens = object (self)
 
   method peek = 
     let exception AllOutOfTokens in
-      if idx + 1 == List.length(tokens) then
-        raise ParserHitTheEnd
+      if idx == 0 then
+        List.nth tokens 0
       else
-        if idx + 1 >= List.length(tokens) then
-          raise AllOutOfTokens
+        if idx + 1 == List.length(tokens) then
+          raise ParserHitTheEnd
         else
-          List.nth tokens (idx + 1)
+          if idx + 1 >= List.length(tokens) then
+            raise AllOutOfTokens
+          else
+            List.nth tokens (idx + 1)
 
   method advance = 
     if idx + 1 >= List.length(tokens) then
@@ -75,7 +80,7 @@ class parser tokens = object (self)
 
   method parse_all = 
     while idx != List.length(tokens) do
-      ignore(self#parse);
+      ignore(self#parse_expr);
     done
 
   method parse_block block =
@@ -105,15 +110,35 @@ class parser tokens = object (self)
             done;
             ignore(self#advance);
             Ok (FunctionCall { f_name = f_name.literal_value; f_args = Some !f_args })
-        | TyOpenParan -> let block = ref ([]: expression list) in
-            self#parse_block block;
-            ignore(self#advance);
-            Ok (Block !block)
+        | TyOpenParan -> 
+          print_endline "Open paren";
+          ignore(self#advance);
+          let next_peek = self#advance in
+            print_endline (Printf.sprintf "After open paren %s" (show_lexer_token next_peek));
+            (match next_peek.ty with
+            (*Parse definition*)
+            | TyLiteral -> 
+              print_endline "\nDefinition\n";
+              self#parse_definition;
+              Ok(Empty)
+            (* | TyAtSymbol ->
+              print_endline "\Function call\n";
+              self#parse_call *)
+            | _ -> let block = ref ([]: expression list) in
+              self#parse_block block;
+              ignore(self#advance);
+              Ok (Block !block))
         | TyLiteral -> 
+          print_endline "Literal";
           Ok (Identifier self#parse_literal.literal_value)
-        | TyEof -> print_endline("1"); Error ParserHitTheEnd;
-        | _ -> print_endline (Printf.sprintf "2 = %s" (show_lexer_token next)); Error UnknownToken;
-
+        | TyEof -> print_endline("1"); 
+          Error ParserHitTheEnd
+        | _ -> 
+          print_endline (Printf.sprintf "2 = %s" (show_lexer_token next));
+          ignore(self#advance);
+          Error UnknownToken
+        ;
+          (*(@print (@print_this "Hello, World!"))*)
   method parse_literal =
     let exception ExpectedLiteral in
     let supposeed_to_be_literal = self#peek in
@@ -125,6 +150,10 @@ class parser tokens = object (self)
           ignore(self#advance);
           lit
         | _ -> raise ExpectedLiteral
+
+  method parse_call = 
+    ignore(self#advance);
+    ()
 
   method parse_definition = 
     let lhs = self#parse_literal in
@@ -156,35 +185,7 @@ class parser tokens = object (self)
             | Some lit -> print_endline lit.literal_value
             | _ -> raise ExpectedLiteral
           ;
-
-  method parse =
-    let exception LeaveMeAlone in
-    try
-      if idx > List.length tokens then
-        raise LeaveMeAlone
-      else
-        let nt = List.nth tokens idx in
-          match nt.ty with
-            (*Parse expression*)
-            | TyOpenParan -> 
-              print_endline "\nOpen paren\n";
-              let next_peek = self#peek in
-              match next_peek.ty with
-              (*Parse definition*)
-              | TyLiteral -> 
-                print_endline "\nDefinition\n";
-                self#parse_definition
-              | _ -> 
-                print_endline (Printf.sprintf "\n\n1Couldnt parse this %s" (show_lexer_token nt));
-                ignore(self#advance);
-              ;
-            | TyCloseParen -> print_endline "\nClosed\n"; ignore(self#advance);
-            | _ -> 
-              print_endline (Printf.sprintf "\n\n2Couldnt parse this %s" (show_lexer_token nt));
-              ignore(self#advance);
-    with
-      LeaveMeAlone -> ()
-  end;;
+        end;;
 
 class lexer input = object (self)
     val mutable ret = ([] : lexer_token list)
@@ -209,13 +210,15 @@ class lexer input = object (self)
             | '"' ->
               ignore(self#advance);
               let exception EarlyRetreat in
-                let str_val = ref "" in
+                let str_val = ref (String.make 1 (String.get input idx)) in
                 try while idx < String.length input do
                   let c = String.get input (idx + 1) in
                     if c == '"' then
+                      let _ = self#advance in
                       raise EarlyRetreat
                     else
                       str_val := !str_val ^ Char.escaped c;
+                      self#advance;
                 done
                 with EarlyRetreat -> self#push_back (TyString !str_val);
               ;
@@ -227,7 +230,7 @@ class lexer input = object (self)
                   | '>' -> self#push_back TyFatArrow;
                   | _ -> self#push_back TyEq;
                 ;
-            | ' ' -> ignore(self#advance);
+            | ' ' | '\n' -> ignore(self#advance);
             | _ ->
               let literal_val = ref (String.make 1 next_char) in
               let exception EarlyRetreat in
@@ -307,8 +310,9 @@ let () =
     lexer_instance#lex_all;
     (*print_int (List.length lexer_instance#get_ret);;*)
     let ret = lexer_instance#get_ret in
-    (* let whatever (lt:lexer_token) = print_endline (show_lexer_token lt); true in
-    let _ = List.for_all whatever (List.rev ret) in *)
+    let whatever (lt:lexer_token) = print_endline (show_lexer_token lt); true in
+    let _ = List.for_all whatever (List.rev ret) in
+    let _ = print_endline "\n" in
     let parser = new parser (List.rev ret) in
       parser#parse_all;
 

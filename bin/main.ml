@@ -41,12 +41,17 @@ let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 let is_digit = function '0' .. '9' -> true | _ -> false
 
 (*The parse function is parse_expr don't let the name confuse you.*)
-class parser tokens = object (self)
+class parser tokens = object (_self)
   val tokens = (tokens : lexer_token list)
   val ret = ([] : parser_result list)
   val mutable idx = 0
 
-  method expect expected = 
+  method parse_all = 
+    ()
+
+  end;;
+
+  (* method expect expected = 
     ignore(self#advance);
     self#expect_tty expected
 
@@ -92,27 +97,14 @@ class parser tokens = object (self)
 
   method parse_expr =
     let exception UnknownToken in
-    let next = self#peek in
+    let next = self#advance in
       match next.ty with
         | TyBackSlash -> 
-          ignore(self#advance);
-          ignore(self#advance);
           print_endline "Backslash";
           let backlash_lit = self#parse_literal in
             Ok (Identifier backlash_lit.literal_value)
         | TyString str ->
-          ignore(self#advance);
           Ok (Literal (StringLiteral str))
-        | TyAtSymbol ->
-          let f_name = self#parse_literal in
-          let f_args = ref ([]: expression list) in 
-            while idx < List.length tokens do
-              let expr = Result.get_ok self#parse_expr in
-                ignore(self#advance);
-                f_args := expr :: !f_args;
-            done;
-            ignore(self#advance);
-            Ok (FunctionCall { f_name = f_name.literal_value; f_args = Some !f_args })
         | TyOpenParan -> 
           let next_peek = self#advance in
             (match next_peek.ty with
@@ -121,6 +113,7 @@ class parser tokens = object (self)
               self#parse_definition;
               Ok(Empty)
             | TyAtSymbol ->
+              print_endline "at sign";
               Ok(Empty)
             | _ -> 
               let block = ref ([]: expression list) in
@@ -128,7 +121,7 @@ class parser tokens = object (self)
                 ignore(self#advance);
                 Ok (Block !block))
         | TyLiteral -> 
-          ignore(self#advance);
+          print_endline "Literal?";
           Ok (Identifier self#parse_literal.literal_value)
         | TyEof -> print_endline("1"); 
           Error ParserHitTheEnd
@@ -140,13 +133,13 @@ class parser tokens = object (self)
           (*(@print (@print_this "Hello, World!"))*)
   method parse_literal =
     let exception ExpectedLiteral in
-    let supposeed_to_be_literal = List.nth tokens idx in
+    let supposeed_to_be_literal = self#peek in
       if supposeed_to_be_literal.ty != TyLiteral then
-        let _ = print_endline (show_lexer_token supposeed_to_be_literal) in
+        let _ = print_endline (Printf.sprintf "\nBefore:\n%s\n\nAfter:\n%s\n\n" (show_lexer_token (List.nth tokens (idx -1))) (show_lexer_token supposeed_to_be_literal)) in
         raise ExpectedLiteral
       else
         match supposeed_to_be_literal.tok_literal with
-        | Some lit ->  lit
+        | Some lit -> lit
         | _ -> raise ExpectedLiteral
 
   method parse_call = 
@@ -169,7 +162,7 @@ class parser tokens = object (self)
     ignore(self#expect TyFatArrow);
     print_endline (Printf.sprintf "\nValue of definition %s is %s" lhs.literal_value (show_expression (Result.get_ok self#parse_expr)));
     ignore(self#expect TyCloseParen);
-    print_endline "End Definiton";
+    print_endline (Printf.sprintf "End Definiton (%s)" (show_lexer_token (List.nth tokens idx)));
 
   (*Starts parsing under the assumption the current token is a hashtag*)
   method parse_derective =
@@ -183,7 +176,7 @@ class parser tokens = object (self)
             | Some lit -> print_endline lit.literal_value
             | _ -> raise ExpectedLiteral
           ;
-        end;;
+        end;; *)
 
 class lexer input = object (self)
     val mutable ret = ([] : lexer_token list)

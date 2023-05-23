@@ -4,6 +4,7 @@ let llvm_i32 = Llvm.i32_type context
 let llvm_i8 = Llvm.i8_type context *)
 
 exception ParserHitTheEnd;;
+exception UnexpectedToken;;
 type std_types = String [@@deriving show];;
 type expression_literals = StringLiteral of string [@@deriving show];;
 type expression = 
@@ -41,13 +42,50 @@ let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 let is_digit = function '0' .. '9' -> true | _ -> false
 
 (*The parse function is parse_expr don't let the name confuse you.*)
-class parser tokens = object (_self)
+class parser tokens = object (self)
   val tokens = (tokens : lexer_token list)
   val ret = ([] : parser_result list)
   val mutable idx = 0
 
+  (*Advances the parser by advance_by_amount*)
+  method advance advance_by_amount = 
+    if idx + advance_by_amount >= List.length tokens then
+      raise ParserHitTheEnd
+    else
+      idx <- idx + advance_by_amount;
+
+  (*Advances the parser by advance_by_amount and then returns the token at the NEW index*)
+  method advance_ret advance_by_amount =
+    let _ =  self#advance advance_by_amount in
+    List.nth tokens idx
+  (*(@print (@print_this "Hello, World!"))*)
+  (*Looks forward in the lexer_tokens list by peek_by and returns the token at the new index*)
+  method peek peek_by = 
+    if idx + peek_by >= List.length tokens then
+      raise ParserHitTheEnd
+    else
+      List.nth tokens (idx + peek_by)
+
+  method parse_expr = 
+    let current = List.nth tokens idx in
+    match current.ty with
+      | TyOpenParan -> 
+        print_endline "Open Paren";
+        let next = self#advance_ret 1 in
+        (match next.ty with
+          | TyLiteral -> 
+            print_endline "Literal";
+            Ok (Empty) 
+          | _ -> Error UnexpectedToken
+        )
+      | _ -> Error UnexpectedToken
+    ;
+
   method parse_all = 
-    ()
+    while (List.nth tokens idx).ty != TyEof do
+      ignore(self#parse_expr);
+      ignore(self#advance 1);
+    done
 
   end;;
 

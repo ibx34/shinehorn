@@ -5,6 +5,7 @@ let llvm_i8 = Llvm.i8_type context *)
 
 exception ParserHitTheEnd;;
 exception UnexpectedToken;;
+exception ExpectedLiteral;;
 type std_types = String [@@deriving show];;
 type expression_literals = StringLiteral of string [@@deriving show];;
 type expression = 
@@ -66,15 +67,45 @@ class parser tokens = object (self)
     else
       List.nth tokens (idx + peek_by)
 
+  method parse_literal = 
+    let supposeed_to_be_literal = List.nth tokens idx in
+    if supposeed_to_be_literal.ty != TyLiteral then
+      raise ExpectedLiteral
+    else
+      match supposeed_to_be_literal.tok_literal with
+      | Some lit -> 
+        ignore(self#advance 1);
+        lit
+      | _ -> raise ExpectedLiteral
+
+  method parse_definition = 
+    let definition_name = self#parse_literal in
+    print_endline (Printf.sprintf "The name of the definition is: \"%s\"" definition_name.literal_value);
+    let type_list = ref ([] : expression list) in
+    while List.mem (List.nth tokens idx).ty [TyFatArrow] == false do
+      let expr = self#parse_expr in
+      type_list := Result.get_ok expr :: !type_list;
+      ()
+    done
+    ;
+    let whatever (lt:expression) = print_endline (show_expression lt); true in
+    let _ = List.for_all whatever (List.rev !type_list) in
+    print_endline "\n"
+  
   method parse_expr = 
     let current = List.nth tokens idx in
     match current.ty with
+      | TyBackSlash -> 
+        let _ = self#advance 1 in
+        let backlash_lit = self#parse_literal in
+          Ok (Identifier backlash_lit.literal_value)
+          
       | TyOpenParan -> 
         print_endline "Open Paren";
         let next = self#advance_ret 1 in
         (match next.ty with
           | TyLiteral -> 
-            print_endline "Literal";
+            let _ = self#parse_definition in
             Ok (Empty) 
           | _ -> Error UnexpectedToken
         )

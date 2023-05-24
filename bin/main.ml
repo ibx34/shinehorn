@@ -3,10 +3,6 @@ let llvm_void = Llvm.void_type context
 let llvm_i32 = Llvm.i32_type context
 let llvm_i8 = Llvm.i8_type context *)
 
-(*
-   (print_this \String \String => x)
-(main => (@print (@print_this "Hello, World!")))*)
-
 exception ParserHitTheEnd [@@deriving show];;
 exception UnexpectedToken [@@deriving show];;
 exception ExpectedSomethingElse [@@deriving show];;
@@ -71,7 +67,6 @@ class parser tokens = object (self)
   method advance_ret advance_by_amount =
     let _ =  self#advance advance_by_amount in
     List.nth tokens idx
-  (*(@print (@print_this "Hello, World!"))*)
   (*Looks forward in the lexer_tokens list by peek_by and returns the token at the new index*)
   method peek peek_by = 
     if idx + peek_by == List.length tokens then

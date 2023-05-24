@@ -5,6 +5,7 @@ let llvm_i8 = Llvm.i8_type context *)
 
 exception ParserHitTheEnd;;
 exception UnexpectedToken;;
+exception ExpectedSomethingElse;;
 exception ExpectedLiteral;;
 type std_types = String [@@deriving show];;
 type expression_literals = StringLiteral of string [@@deriving show];;
@@ -48,6 +49,16 @@ class parser tokens = object (self)
   val ret = ([] : parser_result list)
   val mutable idx = 0
 
+  (*Checks if the current element is equal to the expectant*)
+  (*TODO: add function that peeks ahead and checks*)
+  method expect expectant =
+    let next = List.nth tokens idx in
+      if next.ty != expectant then
+          let _ = print_endline (Printf.sprintf "%s != %s" (show_lexer_token_ty next.ty) (show_lexer_token_ty expectant)) in
+          raise ExpectedSomethingElse
+      else
+        ignore(self#advance 1);
+
   (*Advances the parser by advance_by_amount*)
   method advance advance_by_amount = 
     if idx + advance_by_amount >= List.length tokens then
@@ -90,11 +101,16 @@ class parser tokens = object (self)
     ;
     let whatever (lt:expression) = print_endline (show_expression lt); true in
     let _ = List.for_all whatever (List.rev !type_list) in
+    ignore(self#expect TyFatArrow);
+    let rhs = self#parse_expr in
+    print_endline (Printf.sprintf "The value of the definition is:\n%s\n*******" (show_expression (Result.get_ok rhs)));
     print_endline "\n"
   
   method parse_expr = 
     let current = List.nth tokens idx in
     match current.ty with
+      | TyLiteral ->
+        Ok (Identifier self#parse_literal.literal_value)
       | TyBackSlash -> 
         let _ = self#advance 1 in
         let backlash_lit = self#parse_literal in
@@ -119,133 +135,6 @@ class parser tokens = object (self)
     done
 
   end;;
-
-  (* method expect expected = 
-    ignore(self#advance);
-    self#expect_tty expected
-
-  method expect_tty expected = 
-    let exception ExpectedSomethingElse in
-    let peeked = List.nth tokens idx in
-      if peeked.ty != expected then
-        let _ = print_endline (show_lexer_token peeked) in
-          raise ExpectedSomethingElse
-
-  method peek = 
-    let exception AllOutOfTokens in
-      if idx == 0 then
-        List.nth tokens 0
-      else
-        if idx + 1 == List.length(tokens) then
-          raise ParserHitTheEnd
-        else
-          if idx + 1 >= List.length(tokens) then
-            raise AllOutOfTokens
-          else
-            List.nth tokens (idx + 1)
-
-  method advance = 
-    if idx + 1 >= List.length(tokens) then
-      raise ParserHitTheEnd
-    else
-      idx <- idx + 1;
-      let nth_tok = List.nth tokens idx in
-        nth_tok
-
-  method parse_all = 
-    while idx != List.length(tokens) do
-      ignore(self#parse_expr);
-    done
-
-  method parse_block block =
-    if idx < List.length tokens then
-      let current = List.nth tokens idx in
-        block := Result.get_ok (self#parse_expr) :: !block;
-        if current.ty == TyCloseParen then
-          self#parse_block block;
-
-  method parse_expr =
-    let exception UnknownToken in
-    let next = self#advance in
-      match next.ty with
-        | TyBackSlash -> 
-          print_endline "Backslash";
-          let backlash_lit = self#parse_literal in
-            Ok (Identifier backlash_lit.literal_value)
-        | TyString str ->
-          Ok (Literal (StringLiteral str))
-        | TyOpenParan -> 
-          let next_peek = self#advance in
-            (match next_peek.ty with
-            (*Parse definition*)
-            | TyLiteral ->
-              self#parse_definition;
-              Ok(Empty)
-            | TyAtSymbol ->
-              print_endline "at sign";
-              Ok(Empty)
-            | _ -> 
-              let block = ref ([]: expression list) in
-                self#parse_block block;
-                ignore(self#advance);
-                Ok (Block !block))
-        | TyLiteral -> 
-          print_endline "Literal?";
-          Ok (Identifier self#parse_literal.literal_value)
-        | TyEof -> print_endline("1"); 
-          Error ParserHitTheEnd
-        | _ -> 
-          print_endline (Printf.sprintf "2 = %s" (show_lexer_token next));
-          ignore(self#advance);
-          Error UnknownToken
-        ;
-          (*(@print (@print_this "Hello, World!"))*)
-  method parse_literal =
-    let exception ExpectedLiteral in
-    let supposeed_to_be_literal = self#peek in
-      if supposeed_to_be_literal.ty != TyLiteral then
-        let _ = print_endline (Printf.sprintf "\nBefore:\n%s\n\nAfter:\n%s\n\n" (show_lexer_token (List.nth tokens (idx -1))) (show_lexer_token supposeed_to_be_literal)) in
-        raise ExpectedLiteral
-      else
-        match supposeed_to_be_literal.tok_literal with
-        | Some lit -> lit
-        | _ -> raise ExpectedLiteral
-
-  method parse_call = 
-    ignore(self#advance);
-    ()
-
-  method parse_definition = 
-    let lhs = self#parse_literal in
-    print_endline (Printf.sprintf "Literal value of definition is %s" lhs.literal_value);
-    let def_types = ref ([] : expression list) in
-      while List.mem self#peek.ty [TyFatArrow] == false do
-        let expr = self#parse_expr in
-        def_types := Result.get_ok expr :: !def_types;
-        ()
-      done;
-      
-    print_endline (Printf.sprintf "\n%s type list is %d long\n" lhs.literal_value (List.length !def_types));
-    (* if List.length !def_types > 1 then
-      Curry *)
-    ignore(self#expect TyFatArrow);
-    print_endline (Printf.sprintf "\nValue of definition %s is %s" lhs.literal_value (show_expression (Result.get_ok self#parse_expr)));
-    ignore(self#expect TyCloseParen);
-    print_endline (Printf.sprintf "End Definiton (%s)" (show_lexer_token (List.nth tokens idx)));
-
-  (*Starts parsing under the assumption the current token is a hashtag*)
-  method parse_derective =
-    let exception ExpectedLiteral in
-      (* Get rid of the hashtag cause at this point we don't care about it *)
-      let supposeed_to_be_literal = self#advance in
-        if supposeed_to_be_literal.ty != TyLiteral then
-          raise ExpectedLiteral
-        else
-          match supposeed_to_be_literal.tok_literal with
-            | Some lit -> print_endline lit.literal_value
-            | _ -> raise ExpectedLiteral
-          ;
-        end;; *)
 
 class lexer input = object (self)
     val mutable ret = ([] : lexer_token list)

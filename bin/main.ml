@@ -145,7 +145,7 @@ class parser tokens = object (self)
       done
       ;
       let whatever (lt:parser_result) = print_endline (show_parser_result lt); true in
-        let _ = List.for_all whatever (ret) in
+        let _ = List.for_all whatever (List.rev ret) in
         print_endline (Printf.sprintf "\nLength: %d" (List.length ret));
   end;;
 

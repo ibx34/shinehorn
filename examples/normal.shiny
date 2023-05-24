@@ -1,2 +1,1 @@
-(print_this \String \String => x)
-(main => (@print (@print_this "Hello, World!")))
+(@print (@print_this "Hello, World!"))

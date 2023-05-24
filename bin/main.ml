@@ -3,18 +3,22 @@ let llvm_void = Llvm.void_type context
 let llvm_i32 = Llvm.i32_type context
 let llvm_i8 = Llvm.i8_type context *)
 
-exception ParserHitTheEnd;;
-exception UnexpectedToken;;
-exception ExpectedSomethingElse;;
-exception ExpectedLiteral;;
+(*
+   (print_this \String \String => x)
+(main => (@print (@print_this "Hello, World!")))*)
+
+exception ParserHitTheEnd [@@deriving show];;
+exception UnexpectedToken [@@deriving show];;
+exception ExpectedSomethingElse [@@deriving show];;
+exception ExpectedLiteral [@@deriving show];;
 type std_types = String [@@deriving show];;
 type expression_literals = StringLiteral of string [@@deriving show];;
 type expression = 
   Empty
   | Definition of { 
       d_name: string;
-      d_type_list: std_types list option;
-      d_args_list: string list option; 
+      (*TODO: This should be one of std_types but im a bit lazy :()*)
+      d_type_list: expression list option;
       d_body: expression; 
     } 
   | Block of expression list
@@ -46,7 +50,7 @@ let is_digit = function '0' .. '9' -> true | _ -> false
 (*The parse function is parse_expr don't let the name confuse you.*)
 class parser tokens = object (self)
   val tokens = (tokens : lexer_token list)
-  val ret = ([] : parser_result list)
+  val mutable ret = ([] : parser_result list)
   val mutable idx = 0
 
   (*Checks if the current element is equal to the expectant*)
@@ -54,16 +58,13 @@ class parser tokens = object (self)
   method expect expectant =
     let next = List.nth tokens idx in
       if next.ty != expectant then
-          let _ = print_endline (Printf.sprintf "%s != %s" (show_lexer_token_ty next.ty) (show_lexer_token_ty expectant)) in
           raise ExpectedSomethingElse
       else
         ignore(self#advance 1);
 
   (*Advances the parser by advance_by_amount*)
   method advance advance_by_amount = 
-    if idx + advance_by_amount >= List.length tokens then
-      raise ParserHitTheEnd
-    else
+    if idx + advance_by_amount <= List.length tokens then
       idx <- idx + advance_by_amount;
 
   (*Advances the parser by advance_by_amount and then returns the token at the NEW index*)
@@ -73,7 +74,7 @@ class parser tokens = object (self)
   (*(@print (@print_this "Hello, World!"))*)
   (*Looks forward in the lexer_tokens list by peek_by and returns the token at the new index*)
   method peek peek_by = 
-    if idx + peek_by >= List.length tokens then
+    if idx + peek_by == List.length tokens then
       raise ParserHitTheEnd
     else
       List.nth tokens (idx + peek_by)
@@ -90,8 +91,7 @@ class parser tokens = object (self)
       | _ -> raise ExpectedLiteral
 
   method parse_definition = 
-    let definition_name = self#parse_literal in
-    print_endline (Printf.sprintf "The name of the definition is: \"%s\"" definition_name.literal_value);
+    let lhs = self#parse_literal in
     let type_list = ref ([] : expression list) in
     while List.mem (List.nth tokens idx).ty [TyFatArrow] == false do
       let expr = self#parse_expr in
@@ -99,13 +99,26 @@ class parser tokens = object (self)
       ()
     done
     ;
-    let whatever (lt:expression) = print_endline (show_expression lt); true in
-    let _ = List.for_all whatever (List.rev !type_list) in
-    ignore(self#expect TyFatArrow);
+    let _ = ignore(self#expect TyFatArrow) in
     let rhs = self#parse_expr in
-    print_endline (Printf.sprintf "The value of the definition is:\n%s\n*******" (show_expression (Result.get_ok rhs)));
-    print_endline "\n"
-  
+    Ok (Definition ({ d_name = lhs.literal_value; d_body = Result.get_ok rhs; d_type_list = Some (!type_list) }))
+
+  method parse_function_call = 
+    (*Advance once to get past the @ symbol*)
+    ignore(self#advance 1);
+    let callee = self#parse_literal in
+    print_endline (Printf.sprintf "Function being called: %s" callee.literal_value);
+
+    let lhs = ref ([] : expression list) in
+    while List.mem (List.nth tokens idx).ty [TyCloseParen] == false do
+      let expr = self#parse_expr in
+      lhs := Result.get_ok expr :: !lhs;
+      ()
+    done
+    ;
+    ignore(self#expect TyCloseParen);
+    Ok (FunctionCall { f_name = callee.literal_value; f_args = Some !lhs })
+    
   method parse_expr = 
     let current = List.nth tokens idx in
     match current.ty with
@@ -115,25 +128,30 @@ class parser tokens = object (self)
         let _ = self#advance 1 in
         let backlash_lit = self#parse_literal in
           Ok (Identifier backlash_lit.literal_value)
-          
+      | TyString str ->
+        ignore(self#advance 1);
+        Ok (Literal (StringLiteral str))
       | TyOpenParan -> 
-        print_endline "Open Paren";
         let next = self#advance_ret 1 in
         (match next.ty with
-          | TyLiteral -> 
-            let _ = self#parse_definition in
-            Ok (Empty) 
-          | _ -> Error UnexpectedToken
+          | TyAtSymbol -> self#parse_function_call
+          | TyLiteral -> self#parse_definition
+          | _ -> print_endline "1"; Error UnexpectedToken
         )
-      | _ -> Error UnexpectedToken
+      | _ -> print_endline (Printf.sprintf "2: %s" (show_lexer_token current)); Error UnexpectedToken
     ;
 
   method parse_all = 
-    while (List.nth tokens idx).ty != TyEof do
-      ignore(self#parse_expr);
-      ignore(self#advance 1);
-    done
-
+    (* try *)
+      while idx != List.length tokens do
+        let expr = self#parse_expr in
+        let _ = ret <- Expr (Result.get_ok expr) :: ret in
+        ignore(self#advance 1);
+      done
+      ;
+      let whatever (lt:parser_result) = print_endline (show_parser_result lt); true in
+        let _ = List.for_all whatever (ret) in
+        print_endline (Printf.sprintf "\nLength: %d" (List.length ret));
   end;;
 
 class lexer input = object (self)
@@ -150,9 +168,7 @@ class lexer input = object (self)
           let next_char = String.get input idx in  
             match next_char with 
             | '(' -> self#push_back TyOpenParan
-            | ')' -> 
-              print_endline "2";
-              self#push_back TyCloseParen
+            | ')' -> self#push_back TyCloseParen
             | '#' -> self#push_back TyHashtag
             | '@' -> self#push_back TyAtSymbol
             | '\\' -> print_endline "Backslash";self#push_back TyBackSlash
@@ -264,6 +280,5 @@ let () =
     let _ = print_endline "\n" in *)
     let parser = new parser (List.rev ret) in
       parser#parse_all;
-
     ()
     

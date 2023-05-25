@@ -67,7 +67,7 @@ open Shinehorn.Common;;
       let rhs = self#parse_expr in
       if in_block then
         ignore(self#expect TyCloseParen);
-      Ok (Definition ({ d_name = lhs.literal_value; d_body = Result.get_ok rhs; d_type_list = Some (!type_list) }))
+      Ok (Definition ({ d_name = lhs.literal_value; d_body = Result.get_ok rhs; d_type_list = !type_list }))
 
     method parse_function_call = 
       (*Advance once to get past the @ symbol*)

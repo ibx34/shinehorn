@@ -10,7 +10,7 @@ type expression =
   | Definition of { 
       d_name: string;
       (*TODO: This should be one of std_types but im a bit lazy :()*)
-      d_type_list: expression list option;
+      d_type_list: expression list;
       d_body: expression; 
     } 
   | Block of expression list
@@ -70,8 +70,11 @@ module LLVMFront = struct
     
     method handle_definition ( def : Common.expression ) =
       match def with
-        | Common.Definition def -> 
-          Ok "hi"
+        | Common.Definition d_data -> 
+          if List.length d_data.d_type_list > 0 then
+            Ok "hi"
+          else
+            Ok "h2"
         | _ -> Error ExpecctedDifferentType
   end;;
 end

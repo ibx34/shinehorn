@@ -28,7 +28,7 @@ type parser_result =
   Expr of expression 
   | StdType of std_types [@@deriving show];;
 
-type lexer_token_ty = TyFatArrow | TyOpenParan | TyString of string | TyAtSymbol | TyBackSlash | TyCloseParen | TyEof | TyHashtag | TySpace | TyLiteral | TyEq [@@deriving show];;
+type lexer_token_ty = TyLCurlyBracket | TyRCurlyBracket | TyFatArrow | TyOpenParan | TyString of string | TyAtSymbol | TyBackSlash | TyCloseParen | TyEof | TyHashtag | TySpace | TyLiteral | TyEq [@@deriving show];;
 (*type literal_types = LitString | LitInt;;*)
 type literal_token_value = {
   literal_value: string;
@@ -48,15 +48,22 @@ class parser tokens = object (self)
   val tokens = (tokens : lexer_token list)
   val mutable ret = ([] : parser_result list)
   val mutable idx = 0
+  (*If someone wants to tell me why i have to do this pls do*)
+  (*I think it has to do with how in a block it doesnt advance after every expression is parsed
+     whereas when ever parsing the entire file it does*)
+  val mutable in_block = false
+
+  method __expect expectant = 
+    let next = List.nth tokens idx in
+      next.ty == expectant
 
   (*Checks if the current element is equal to the expectant*)
   (*TODO: add function that peeks ahead and checks*)
   method expect expectant =
-    let next = List.nth tokens idx in
-      if next.ty != expectant then
-          raise ExpectedSomethingElse
-      else
-        ignore(self#advance 1);
+    if self#__expect expectant == false then
+        raise ExpectedSomethingElse
+    else
+      ignore(self#advance 1);
 
   (*Advances the parser by advance_by_amount*)
   method advance advance_by_amount = 
@@ -96,6 +103,8 @@ class parser tokens = object (self)
     ;
     let _ = ignore(self#expect TyFatArrow) in
     let rhs = self#parse_expr in
+    if in_block then
+      ignore(self#expect TyCloseParen);
     Ok (Definition ({ d_name = lhs.literal_value; d_body = Result.get_ok rhs; d_type_list = Some (!type_list) }))
 
   method parse_function_call = 
@@ -131,9 +140,23 @@ class parser tokens = object (self)
         (match next.ty with
           | TyAtSymbol -> self#parse_function_call
           | TyLiteral -> self#parse_definition
-          | _ -> print_endline "1"; Error UnexpectedToken
+          (*Block?*)
+          | _ -> Error UnexpectedToken
         )
-      | _ -> print_endline (Printf.sprintf "2: %s" (show_lexer_token current)); Error UnexpectedToken
+      | TyLCurlyBracket ->
+        ignore(self#advance_ret 1);
+        in_block <- true;
+        let block = ref ([] : expression list) in
+            while List.mem (List.nth tokens idx).ty [TyRCurlyBracket] == false do
+              let expr = self#parse_expr in
+              block := Result.get_ok expr :: !block;
+              ()
+            done
+            ;
+            ignore(self#expect TyRCurlyBracket);
+            in_block <- false;
+            Ok (Block !block)
+      | _ -> print_endline (Printf.sprintf "2@: %s\n" (show_lexer_token current)); Error UnexpectedToken
     ;
 
   method parse_all = 
@@ -163,6 +186,8 @@ class lexer input = object (self)
           let next_char = String.get input idx in  
             match next_char with 
             | '(' -> self#push_back TyOpenParan
+            | '{' -> self#push_back TyLCurlyBracket
+            | '}' -> self#push_back TyRCurlyBracket
             | ')' -> self#push_back TyCloseParen
             | '#' -> self#push_back TyHashtag
             | '@' -> self#push_back TyAtSymbol
@@ -190,7 +215,7 @@ class lexer input = object (self)
                   | '>' -> self#push_back TyFatArrow;
                   | _ -> self#push_back TyEq;
                 ;
-            | ' ' | '\n' -> ignore(self#advance);
+            | ' ' | '\n' | '\t' -> ignore(self#advance);
             | _ ->
               let literal_val = ref (String.make 1 next_char) in
               let exception EarlyRetreat in

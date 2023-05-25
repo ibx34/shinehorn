@@ -264,7 +264,12 @@ let () =
     let _ = print_endline "\n" in *)
     let parser = new parser (List.rev ret) in
       parser#parse_all;
-    let llvm = new LLVMFront.llvm (List.rev parser#get_ret) in
+    let pret = List.rev parser#get_ret in
+    let llvm = new LLVMFront.llvm (pret) in
       llvm#init;
+      match List.nth pret 0 with
+      | Common.Expr expr -> ignore(llvm#handle_definition expr);
+      | _ -> ()
+      ;
     ()
     

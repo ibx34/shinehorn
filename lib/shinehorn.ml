@@ -76,6 +76,8 @@ module LLVMFront = struct
       | Common.Identifier ident -> (match ident with 
         | "I32" -> args_type_list := llvm_i32 :: !args_type_list;
         | "I8" -> args_type_list := llvm_i8 :: !args_type_list;
+        (*Memory safety should be a priority. This wont exist in future verrsions*)
+        | "String" -> args_type_list := llvm_string_type 0 :: !args_type_list;
         | _ -> raise UndefinedType);
         true
       | _ -> raise ExpecctedDifferentType

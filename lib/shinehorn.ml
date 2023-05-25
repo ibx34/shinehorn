@@ -70,16 +70,14 @@ module LLVMFront = struct
           Hashtbl.add mods "main" main;
     
     method create_function args_type = 
-      let args_type_list = ref ([] : Llvm.lltype list) in
-      let _ = List.for_all (fun ty -> 
+      let args_type_list = List.map (fun ty -> 
       match ty with
       | Common.Identifier ident -> (match ident with 
-        | "I32" -> args_type_list := llvm_i32 :: !args_type_list;
-        | "I8" -> args_type_list := llvm_i8 :: !args_type_list;
+        | "i32" -> llvm_i32
+        | "i8" -> llvm_i8
         (*Memory safety should be a priority. This wont exist in future verrsions*)
-        | "String" -> args_type_list := llvm_string_type 0 :: !args_type_list;
-        | _ -> raise UndefinedType);
-        true
+        | "String" -> llvm_string_type 0
+        | _ -> raise UndefinedType)
       | _ -> raise ExpecctedDifferentType
       ) args_type in
       ()

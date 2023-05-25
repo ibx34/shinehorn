@@ -41,14 +41,15 @@ let is_digit = function '0' .. '9' -> true | _ -> false
 end
 
 module LLVMFront = struct
+  exception ExpecctedDifferentType [@@deriving show];;
+  exception NotAFunctionDef [@@deriving show];;
   let context = Llvm.global_context ()
   let llvm_void = Llvm.void_type context
   let llvm_i32 = Llvm.i32_type context
   let llvm_i8 = Llvm.i8_type context
   let llvm_void_array = Array.make 0 llvm_void
-
+  let llvm_string_type size = Llvm.array_type llvm_i8 size 
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
-  
   class llvm input = object (_self)
     val parser_results_or_ast = (input : Common.parser_result list)
     val mutable idx = 0
@@ -66,5 +67,11 @@ module LLVMFront = struct
           look up values*)
           Hashtbl.add functions "c_print" print_fn;
           Hashtbl.add mods "main" main;
+    
+    method handle_definition ( def : Common.expression ) =
+      match def with
+        | Common.Definition def -> 
+          Ok "hi"
+        | _ -> Error ExpecctedDifferentType
   end;;
 end

@@ -291,6 +291,7 @@ let open_up_file_and_use_results file_name =
     () *)
 
 let () = 
+  let _ = print_endline Shinehorn.LLVMFront.meow in
   let lexer_instance = new lexer (open_up_file_and_use_results "examples/normal.shiny") in
     lexer_instance#lex_all;
     (*print_int (List.length lexer_instance#get_ret);;*)

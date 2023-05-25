@@ -43,6 +43,7 @@ end
 module LLVMFront = struct
   exception ExpecctedDifferentType [@@deriving show];;
   exception NotAFunctionDef [@@deriving show];;
+  exception UndefinedType [@@deriving show];;
   let context = Llvm.global_context ()
   let llvm_void = Llvm.void_type context
   let llvm_i32 = Llvm.i32_type context
@@ -50,7 +51,7 @@ module LLVMFront = struct
   let llvm_void_array = Array.make 0 llvm_void
   let llvm_string_type size = Llvm.array_type llvm_i8 size 
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
-  class llvm input = object (_self)
+  class llvm input = object (self)
     val parser_results_or_ast = (input : Common.parser_result list)
     val mutable idx = 0
     (*10 is arbitrary and doesnt really matter. it can be expanded for faster inserts i think?*)
@@ -68,10 +69,24 @@ module LLVMFront = struct
           Hashtbl.add functions "c_print" print_fn;
           Hashtbl.add mods "main" main;
     
+    method create_function args_type = 
+      let args_type_list = ref ([] : Llvm.lltype list) in
+      let _ = List.for_all (fun ty -> 
+      match ty with
+      | Common.Identifier ident -> (match ident with 
+        | "I32" -> args_type_list := llvm_i32 :: !args_type_list;
+        | "I8" -> args_type_list := llvm_i8 :: !args_type_list;
+        | _ -> raise UndefinedType);
+        true
+      | _ -> raise ExpecctedDifferentType
+      ) args_type in
+      ()
+
     method handle_definition ( def : Common.expression ) =
       match def with
         | Common.Definition d_data -> 
-          if List.length d_data.d_type_list > 0 then
+          if List.length d_data.d_type_list > 1 then
+            let _ = self#create_function d_data.d_type_list in
             Ok "hi"
           else
             Ok "h2"

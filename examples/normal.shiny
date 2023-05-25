@@ -1,7 +1,5 @@
-(main => {
-    (print_this \String \String => x)
-    (@print (@print_this "Hello, World!"))
-    {
-        (@print (@print_this "Hello, World!"))
-    }
-})
+(print_this \String \String => x)
+(@c_print (@print_this "Hello, World!"))
+{
+    (@c_print (@print_this "Hello, World!"))
+}

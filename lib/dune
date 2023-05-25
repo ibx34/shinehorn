@@ -1,2 +1,6 @@
 (library
- (name shinehorn))
+ (name shinehorn)
+ (libraries llvm llvm.analysis llvm.target)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord))
+)

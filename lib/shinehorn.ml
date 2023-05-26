@@ -82,7 +82,7 @@ module LLVMFront = struct
           let _ = Llvm.define_global "random_struct" const_struct_value main_module in *)
 
     method create_function args_type = 
-      let _args_type_list = List.map (fun ty -> 
+      let args_type_list = List.map (fun ty -> 
       match ty with
       | Common.Identifier ident -> (match ident with 
         | "i32" -> llvm_i32
@@ -95,7 +95,15 @@ module LLVMFront = struct
         | _ -> raise UndefinedType)
       | _ -> raise ExpecctedDifferentType
       ) args_type in
-      ()
+      try
+        let string_ty = Hashtbl.find custom_types "string" in
+        let main_module = Hashtbl.find mods "main" in
+        let function_ty = Llvm.function_type string_ty (Array.of_list args_type_list) in
+        let func_fn = Llvm.declare_function "main" function_ty main_module in
+        let _ = Llvm.append_block context "entry" func_fn in 
+        let _ = Llvm.print_module "out.ll" main_module in
+        ()
+      with Not_found -> raise Not_found
 
 
     (*

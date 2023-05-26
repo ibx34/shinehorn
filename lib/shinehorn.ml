@@ -82,6 +82,24 @@ module LLVMFront = struct
       ) args_type in
       ()
 
+
+    (*
+    
+      let main_module = Llvm.create_module context "main" in
+  (*the i8 is the pointer and i64 is the length*)
+  let struct_types = (Array.make 1 llvm_i8) in
+  let struct_types = Array.append struct_types (Array.make 1 llvm_i64) in
+  (*This creates a named struct.*)
+  let struct_ty = Llvm.named_struct_type context "String" in
+  let _ = Llvm.struct_set_body struct_ty struct_types false in
+  let str_struct = Llvm.string_of_lltype struct_ty in
+  print_endline str_struct;
+  let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
+  let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
+  let _ = Llvm.define_global "random_struct" const_struct_value main_module in
+    
+    *)
+
     method handle_definition ( def : Common.expression ) =
       match def with
         | Common.Definition d_data -> 

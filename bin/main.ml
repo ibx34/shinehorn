@@ -1,7 +1,8 @@
-let context = Llvm.global_context ()
+let context = Llvm.create_context ()
 let llvm_void = Llvm.void_type context
 let llvm_i32 = Llvm.i32_type context
 let llvm_i8 = Llvm.i8_type context
+let llvm_i64 = Llvm.i64_type context
 open Shinehorn;;
 open Shinehorn.Common;;
 
@@ -230,14 +231,19 @@ open Shinehorn.Common;;
       close_in file;
       s
 
-let () = 
+(* let () = 
   let main_module = Llvm.create_module context "main" in
-  let struct_types = Array.make 1 llvm_i8 in
-  let struct_ty = Llvm.named_struct_type (Llvm.module_context main_module) "String" in
+  (*the i8 is the pointer and i64 is the length*)
+  let struct_types = (Array.make 1 llvm_i8) in
+  let struct_types = Array.append struct_types (Array.make 1 llvm_i64) in
+  (*This creates a named struct.*)
+  let struct_ty = Llvm.named_struct_type context "String" in
   let _ = Llvm.struct_set_body struct_ty struct_types false in
   let str_struct = Llvm.string_of_lltype struct_ty in
   print_endline str_struct;
-  
+  let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
+  let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
+  let _ = Llvm.define_global "random_struct" const_struct_value main_module in
   (* let main_fn_arg_tys = Array.make 0 llvm_void in
   let print_ty = Llvm.var_arg_function_type llvm_i32 main_fn_arg_tys in
   let print_fn = Llvm.declare_function "printf" print_ty main_module in
@@ -256,9 +262,9 @@ let () =
   let _ = Llvm.position_at_end fn_entry builder in
   let _ = Llvm.build_ret_void builder in *)
   let _ = Llvm.print_module "out.ll" main_module in
-    ()
+    () *)
 
-(* let () = 
+let () = 
   let lexer_instance = new lexer (open_up_file_and_use_results "examples/normal.shiny") in
     lexer_instance#lex_all;
     (*print_int (List.length lexer_instance#get_ret);;*)
@@ -276,4 +282,4 @@ let () =
       | _ -> ()
       ;
     ()
-     *)
+    

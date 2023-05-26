@@ -48,6 +48,7 @@ module LLVMFront = struct
   let llvm_void = Llvm.void_type context
   let llvm_i32 = Llvm.i32_type context
   let llvm_i8 = Llvm.i8_type context
+  let llvm_i64 = Llvm.i64_type context
   let llvm_void_array = Array.make 0 llvm_void
   let llvm_string_type size = Llvm.array_type llvm_i8 size 
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
@@ -57,6 +58,7 @@ module LLVMFront = struct
     (*10 is arbitrary and doesnt really matter. it can be expanded for faster inserts i think?*)
     val mutable functions = Hashtbl.create 10
     val mutable mods = Hashtbl.create 10
+    val mutable custom_types = Hashtbl.create 10
 
     (*Crates the main module*)
     method init =
@@ -69,6 +71,16 @@ module LLVMFront = struct
           Hashtbl.add functions "c_print" print_fn;
           Hashtbl.add mods "main" main;
     
+          let struct_types = (Array.make 1 llvm_i8) in
+          let struct_types = Array.append struct_types (Array.make 1 llvm_i64) in
+          (*This creates a named struct.*)
+          let struct_ty = Llvm.named_struct_type context "String" in
+          let _ = Llvm.struct_set_body struct_ty struct_types false in
+          Hashtbl.add custom_types "string" struct_ty;
+          (* let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
+          let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
+          let _ = Llvm.define_global "random_struct" const_struct_value main_module in *)
+
     method create_function args_type = 
       let _args_type_list = List.map (fun ty -> 
       match ty with
@@ -76,7 +88,10 @@ module LLVMFront = struct
         | "i32" -> llvm_i32
         | "i8" -> llvm_i8
         (*Memory safety should be a priority. This wont exist in future verrsions*)
-        | "String" -> llvm_string_type 0
+        | "String" -> (try
+            let string_ty = Hashtbl.find custom_types "string" in
+              string_ty
+          with Not_found -> raise Not_found)
         | _ -> raise UndefinedType)
       | _ -> raise ExpecctedDifferentType
       ) args_type in

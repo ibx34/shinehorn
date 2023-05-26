@@ -70,7 +70,7 @@ module LLVMFront = struct
           Hashtbl.add mods "main" main;
     
     method create_function args_type = 
-      let args_type_list = List.map (fun ty -> 
+      let _args_type_list = List.map (fun ty -> 
       match ty with
       | Common.Identifier ident -> (match ident with 
         | "i32" -> llvm_i32

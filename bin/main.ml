@@ -1,7 +1,7 @@
-(* let context = Llvm.global_context ()
+let context = Llvm.global_context ()
 let llvm_void = Llvm.void_type context
 let llvm_i32 = Llvm.i32_type context
-let llvm_i8 = Llvm.i8_type context *)
+let llvm_i8 = Llvm.i8_type context
 open Shinehorn;;
 open Shinehorn.Common;;
 
@@ -230,31 +230,35 @@ open Shinehorn.Common;;
       close_in file;
       s
 
-  (* let () = 
-    let builder = Llvm.builder context in
-    let main_module = Llvm.create_module context "main" in
-
-    let main_fn_arg_tys = Array.make 0 llvm_void in
-    let print_ty = Llvm.var_arg_function_type llvm_i32 main_fn_arg_tys in
-    let print_fn = Llvm.declare_function "printf" print_ty main_module in
-    let main_ty = Llvm.function_type llvm_void main_fn_arg_tys in
-    let main_fn = Llvm.declare_function "main" main_ty main_module in
-    let fn_entry = Llvm.append_block context "entry" main_fn in 
-    let to_print = "Hello, World\\0" in
-    let to_print_len = String.length(to_print) in
-    let string_ty = Llvm.array_type llvm_i8 to_print_len in
-    let _ = Llvm.position_at_end fn_entry builder in
-    let alloc_val = Llvm.const_string context to_print in
-    let alloc = Llvm.build_alloca string_ty "to_print" builder in
-    let _ = Llvm.build_store alloc_val alloc builder in
-    let variable_array = Array.make 1 alloc in
-    let _ = Llvm.build_call print_fn variable_array "call_print_f" builder in
-    let _ = Llvm.position_at_end fn_entry builder in
-    let _ = Llvm.build_ret_void builder in
-    let _ = Llvm.print_module "out.ll" main_module in
-      () *)
-
 let () = 
+  let main_module = Llvm.create_module context "main" in
+  let struct_types = Array.make 1 llvm_i8 in
+  let struct_ty = Llvm.named_struct_type (Llvm.module_context main_module) "String" in
+  let _ = Llvm.struct_set_body struct_ty struct_types false in
+  let str_struct = Llvm.string_of_lltype struct_ty in
+  print_endline str_struct;
+  
+  (* let main_fn_arg_tys = Array.make 0 llvm_void in
+  let print_ty = Llvm.var_arg_function_type llvm_i32 main_fn_arg_tys in
+  let print_fn = Llvm.declare_function "printf" print_ty main_module in
+  let main_ty = Llvm.function_type llvm_void main_fn_arg_tys in
+  let main_fn = Llvm.declare_function "main" main_ty main_module in
+  let fn_entry = Llvm.append_block context "entry" main_fn in 
+  let to_print = "Hello, World\\0" in
+  let to_print_len = String.length(to_print) in
+  let string_ty = Llvm.array_type llvm_i8 to_print_len in
+  let _ = Llvm.position_at_end fn_entry builder in
+  let alloc_val = Llvm.const_string context to_print in
+  let alloc = Llvm.build_alloca string_ty "to_print" builder in
+  let _ = Llvm.build_store alloc_val alloc builder in
+  let variable_array = Array.make 1 alloc in
+  let _ = Llvm.build_call print_fn variable_array "call_print_f" builder in
+  let _ = Llvm.position_at_end fn_entry builder in
+  let _ = Llvm.build_ret_void builder in *)
+  let _ = Llvm.print_module "out.ll" main_module in
+    ()
+
+(* let () = 
   let lexer_instance = new lexer (open_up_file_and_use_results "examples/normal.shiny") in
     lexer_instance#lex_all;
     (*print_int (List.length lexer_instance#get_ret);;*)
@@ -272,4 +276,4 @@ let () =
       | _ -> ()
       ;
     ()
-    
+     *)

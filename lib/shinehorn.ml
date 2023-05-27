@@ -1,43 +1,47 @@
 module Common = struct 
-exception ParserHitTheEnd [@@deriving show];;
-exception UnexpectedToken [@@deriving show];;
-exception ExpectedSomethingElse [@@deriving show];;
-exception ExpectedLiteral [@@deriving show];;
-type std_types = String [@@deriving show];;
-type expression_literals = StringLiteral of string [@@deriving show];;
-type expression = 
-  Empty
-  | Definition of { 
-      d_name: string;
-      (*TODO: This should be one of std_types but im a bit lazy :()*)
-      d_type_list: expression list;
-      d_body: expression; 
-    } 
-  | Block of expression list
-  | Literal of expression_literals
-  | Identifier of string
-  | FunctionCall of {
-    f_name: string;
-    f_args: expression list option
+  exception ParserHitTheEnd [@@deriving show];;
+  exception UnexpectedToken [@@deriving show];;
+  exception ExpectedSomethingElse [@@deriving show];;
+  exception ExpectedLiteral [@@deriving show];;
+  type std_types = String [@@deriving show];;
+  type expression_literals = StringLiteral of string [@@deriving show];;
+  type expression = 
+    | Empty
+    | DefinitionTypeListItem of {
+      ident: expression option;
+      _type: string;
+    }
+    | Definition of { 
+        d_name: string;
+        (*TODO: This should be one of std_types but im a bit lazy :()*)
+        d_type_list: expression list;
+        d_body: expression; 
+      } 
+    | Block of expression list
+    | Literal of expression_literals
+    | Identifier of string
+    | FunctionCall of {
+      f_name: string;
+      f_args: expression list option
+    } [@@deriving show];;
+  type parser_result = 
+    Expr of expression 
+    | StdType of std_types [@@deriving show];;
+
+  type lexer_token_ty = TyLCurlyBracket | TyRCurlyBracket | TyFatArrow | TyOpenParan | TyString of string | TyAtSymbol | TyBackSlash | TyCloseParen | TyEof | TyHashtag | TySpace | TyLiteral | TyEq [@@deriving show];;
+  (*type literal_types = LitString | LitInt;;*)
+  type literal_token_value = {
+    literal_value: string;
   } [@@deriving show];;
-type parser_result = 
-  Expr of expression 
-  | StdType of std_types [@@deriving show];;
 
-type lexer_token_ty = TyLCurlyBracket | TyRCurlyBracket | TyFatArrow | TyOpenParan | TyString of string | TyAtSymbol | TyBackSlash | TyCloseParen | TyEof | TyHashtag | TySpace | TyLiteral | TyEq [@@deriving show];;
-(*type literal_types = LitString | LitInt;;*)
-type literal_token_value = {
-  literal_value: string;
-} [@@deriving show];;
-
-type lexer_token = { 
-  ty: lexer_token_ty; 
-  tok_literal: literal_token_value option; 
-} [@@deriving show];;
+  type lexer_token = { 
+    ty: lexer_token_ty; 
+    tok_literal: literal_token_value option; 
+  } [@@deriving show];;
 
 
-let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
-let is_digit = function '0' .. '9' -> true | _ -> false
+  let is_alpha = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
+  let is_digit = function '0' .. '9' -> true | _ -> false
 end
 
 module LLVMFront = struct
@@ -50,7 +54,7 @@ module LLVMFront = struct
   let llvm_i8 = Llvm.i8_type context
   let llvm_i64 = Llvm.i64_type context
   let llvm_void_array = Array.make 0 llvm_void
-  let llvm_string_type size = Llvm.array_type llvm_i8 size 
+  let llvm_string_type size = Llvm.array_type llvm_i8 size
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
   class llvm input = object (self)
     val parser_results_or_ast = (input : Common.parser_result list)
@@ -60,27 +64,104 @@ module LLVMFront = struct
     val mutable mods = Hashtbl.create 10
     val mutable custom_types = Hashtbl.create 10
 
+    method advance advance_by_amount = 
+      if idx + advance_by_amount <= List.length parser_results_or_ast then
+        idx <- idx + advance_by_amount;
+
     (*Crates the main module*)
     method init =
       let main = Llvm.create_module context "main" in
         let print_ty = Llvm.var_arg_function_type llvm_i32 llvm_void_array in
         (*save*)
         let print_fn = Llvm.declare_function "printf" print_ty main in
-          (*Both this and the modules list should be some sorta of python dict-esk thing so we can easily 
-          look up values*)
-          Hashtbl.add functions "c_print" print_fn;
-          Hashtbl.add mods "main" main;
+        (*Both this and the modules list should be some sorta of python dict-esk thing so we can easily 
+        look up values*)
+        Hashtbl.add functions "c_print" print_fn;
+        Hashtbl.add mods "main" main;
+  
+        let struct_types = (Array.make 1 llvm_i8) in
+        let struct_types = Array.append struct_types (Array.make 1 llvm_i64) in
+        (*This creates a named struct.*)
+        let struct_ty = Llvm.named_struct_type context "String" in
+        let _ = Llvm.struct_set_body struct_ty struct_types false in
+        Hashtbl.add custom_types "string" struct_ty;
+        (* let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
+        let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
+        let _ = Llvm.define_global "random_struct" const_struct_value main_module in *)
     
-          let struct_types = (Array.make 1 llvm_i8) in
-          let struct_types = Array.append struct_types (Array.make 1 llvm_i64) in
-          (*This creates a named struct.*)
-          let struct_ty = Llvm.named_struct_type context "String" in
-          let _ = Llvm.struct_set_body struct_ty struct_types false in
-          Hashtbl.add custom_types "string" struct_ty;
-          (* let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
-          let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
-          let _ = Llvm.define_global "random_struct" const_struct_value main_module in *)
+    method handle = function
+      | Common.Definition def ->  
+        let args_type_list = List.map (fun ty -> 
+          match ty with
+          | Common.DefinitionTypeListItem item -> (match item._type with 
+            | "i32" -> llvm_i32
+            | "i8" -> llvm_i8
+            | "String" -> (try
+                let string_ty = Hashtbl.find custom_types "string" in
+                  string_ty
+              with Not_found -> raise Not_found)
+            | _ -> raise UndefinedType)
+          | _ -> raise ExpecctedDifferentType
+          ) (List.filter (fun ele -> (match ele with
+          | Common.DefinitionTypeListItem def -> Option.is_none def.ident
+          | _ -> false)) def.d_type_list) in
+          (try
+            (* Determining the return type should go diff *)
+            let possible_ret = (
+            try 
+              Some (List.find (fun ele -> (match ele with
+              | Common.DefinitionTypeListItem def -> Option.is_none def.ident
+              | _ -> false)) def.d_type_list)
+            with Not_found -> None
+            ) in
+            print_endline (Common.show_expression (Option.get possible_ret));
+            let string_ty = Hashtbl.find custom_types "string" in
+            let builder = Llvm.builder context in
+            let main_module = Hashtbl.find mods "main" in
+            let function_ty = Llvm.function_type string_ty (Array.of_list args_type_list) in
+            let func_fn = Llvm.declare_function "main" function_ty main_module in
+            let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
+            let const_struct_value = Llvm.const_named_struct string_ty struct_vals in
+            let fn_entry = Llvm.append_block context "entry" func_fn in 
+            let _ = Llvm.position_at_end fn_entry builder in
+            let _ = Llvm.build_ret const_struct_value builder in
 
+            let _ = Llvm.print_module "out.ll" main_module in
+            ()
+          with Not_found -> raise Not_found)
+      | _ -> raise ExpecctedDifferentType
+(*
+   
+    method parse_all = 
+      (* try *)
+        while idx != List.length tokens do
+          let expr = self#parse_expr in
+          let _ = ret <- Expr (Result.get_ok expr) :: ret in
+          ignore(self#advance 1);
+        done
+        ;
+        let whatever (lt:parser_result) = print_endline (show_parser_result lt); true in
+          let _ = List.for_all whatever (List.rev ret) in
+          print_endline (Printf.sprintf "\nLength: %d" (List.length ret));
+
+*)
+    method handle_expr = function
+      | Common.Expr expr -> self#handle expr
+      | _ -> raise ExpecctedDifferentType
+
+    method handle_all = 
+      while idx != List.length parser_results_or_ast do
+        let _ = self#handle_expr (List.nth parser_results_or_ast idx) in
+        ignore(self#advance 1);
+      done;
+
+    method finished = 
+      try
+        let main_module = Hashtbl.find mods "main" in
+        let _ = Llvm.print_module "out.ll" main_module in
+        ()
+      with Not_found -> raise Not_found
+(* 
     method create_function args_type = 
       let args_type_list = List.map (fun ty -> 
       match ty with
@@ -103,7 +184,7 @@ module LLVMFront = struct
         let _ = Llvm.append_block context "entry" func_fn in 
         let _ = Llvm.print_module "out.ll" main_module in
         ()
-      with Not_found -> raise Not_found
+      with Not_found -> raise Not_found *)
 
 
     (*
@@ -122,7 +203,7 @@ module LLVMFront = struct
   let _ = Llvm.define_global "random_struct" const_struct_value main_module in
     
     *)
-
+(* 
     method handle_definition ( def : Common.expression ) =
       match def with
         | Common.Definition d_data -> 
@@ -131,6 +212,6 @@ module LLVMFront = struct
             Ok "hi"
           else
             Ok "h2"
-        | _ -> Error ExpecctedDifferentType
+        | _ -> Error ExpecctedDifferentType *)
   end;;
 end

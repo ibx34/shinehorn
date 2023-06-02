@@ -288,8 +288,9 @@ let () =
     let pret = List.rev parser#get_ret in
     let llvm = new LLVMFront.llvm (pret) in
       llvm#init;
-      llvm#handle_all;
-      llvm#finished;
+      llvm#parse (List.hd pret);
+      (* llvm#handle_all;
+      llvm#finished; *)
       ;
     ()
     

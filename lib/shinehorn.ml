@@ -59,7 +59,8 @@ module LLVMFront = struct
     to handle the definitionn of functions and first class citizens:)*)
   type type_wrappers = 
   Llvm of Llvm.lltype
-  | Fn of { name: string; args: type_wrappers list option; ret: type_wrappers option}
+  | Fn of { name: string; args: type_wrappers list option; ret: type_wrappers option; body: Common.expression}
+
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
   class llvm input = object (self)
     val parser_results_or_ast = (input : Common.parser_result list)
@@ -94,6 +95,10 @@ module LLVMFront = struct
         let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
         let _ = Llvm.define_global "random_struct" const_struct_value main_module in *)
       
+    method parse = function 
+      | Common.Expr (Common.Definition (_)) as def -> self#parse_definition def
+      | _ -> ()
+
     method parse_definition = function
       | Common.Expr (Common.Definition { 
         d_name: string;
@@ -107,11 +112,8 @@ module LLVMFront = struct
           | _ -> failwith "Somehow, this slipped in... it probably isnt handled rightnow"
         )) d_type_list in
           let num_of_named_args = List.length named_args in
-          let num_of_other_args = (List.length d_type_list) - num_of_named_args in
-          if num_of_other_args > 1 then
-            failwith "Too many unnamed args..."
-          else
-            print_endline (Common.show_expression d_body)
+          (*We need to walk the body of the expression and check for it's type. this can be done by making a generalized parse fn that returns the wrapped type *type from above*)
+          print_endline (Common.show_expression d_body)
       | _ -> ()
 
     (*

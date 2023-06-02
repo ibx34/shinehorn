@@ -55,6 +55,11 @@ module LLVMFront = struct
   let llvm_i64 = Llvm.i64_type context
   let llvm_void_array = Array.make 0 llvm_void
   let llvm_string_type size = Llvm.array_type llvm_i8 size
+  (*All functions in the llvm object should return this so its easier
+    to handle the definitionn of functions and first class citizens:)*)
+  type type_wrappers = 
+  Llvm of Llvm.lltype
+  | Fn of { name: string; args: type_wrappers list option; ret: type_wrappers option}
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
   class llvm input = object (self)
     val parser_results_or_ast = (input : Common.parser_result list)
@@ -88,104 +93,26 @@ module LLVMFront = struct
         (* let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
         let const_struct_value = Llvm.const_named_struct struct_ty struct_vals in
         let _ = Llvm.define_global "random_struct" const_struct_value main_module in *)
-    
-    method handle = function
-      | Common.Definition def ->  
-        let args_type_list = List.map (fun ty -> 
-          match ty with
-          | Common.DefinitionTypeListItem item -> (match item._type with 
-            | "i32" -> llvm_i32
-            | "i8" -> llvm_i8
-            | "String" -> (try
-                let string_ty = Hashtbl.find custom_types "string" in
-                  string_ty
-              with Not_found -> raise Not_found)
-            | _ -> raise UndefinedType)
-          | _ -> raise ExpecctedDifferentType
-          ) (List.filter (fun ele -> (match ele with
-          | Common.DefinitionTypeListItem def -> Option.is_none def.ident
-          | _ -> false)) def.d_type_list) in
-          (try
-            (* Determining the return type should go diff *)
-            let possible_ret = (
-            try 
-              Some (List.find (fun ele -> (match ele with
-              | Common.DefinitionTypeListItem def -> Option.is_none def.ident
-              | _ -> false)) def.d_type_list)
-            with Not_found -> None
-            ) in
-            print_endline (Common.show_expression (Option.get possible_ret));
-            let string_ty = Hashtbl.find custom_types "string" in
-            let builder = Llvm.builder context in
-            let main_module = Hashtbl.find mods "main" in
-            let function_ty = Llvm.function_type string_ty (Array.of_list args_type_list) in
-            let func_fn = Llvm.declare_function "main" function_ty main_module in
-            let struct_vals = Array.make 1 (Llvm.const_int llvm_i8 5) in 
-            let const_struct_value = Llvm.const_named_struct string_ty struct_vals in
-            let fn_entry = Llvm.append_block context "entry" func_fn in 
-            let _ = Llvm.position_at_end fn_entry builder in
-            let _ = Llvm.build_ret const_struct_value builder in
-
-            let _ = Llvm.print_module "out.ll" main_module in
-            ()
-          with Not_found -> raise Not_found)
-      | _ -> raise ExpecctedDifferentType
-(*
-   
-    method parse_all = 
-      (* try *)
-        while idx != List.length tokens do
-          let expr = self#parse_expr in
-          let _ = ret <- Expr (Result.get_ok expr) :: ret in
-          ignore(self#advance 1);
-        done
-        ;
-        let whatever (lt:parser_result) = print_endline (show_parser_result lt); true in
-          let _ = List.for_all whatever (List.rev ret) in
-          print_endline (Printf.sprintf "\nLength: %d" (List.length ret));
-
-*)
-    method handle_expr = function
-      | Common.Expr expr -> self#handle expr
-      | _ -> raise ExpecctedDifferentType
-
-    method handle_all = 
-      while idx != List.length parser_results_or_ast do
-        let _ = self#handle_expr (List.nth parser_results_or_ast idx) in
-        ignore(self#advance 1);
-      done;
-
-    method finished = 
-      try
-        let main_module = Hashtbl.find mods "main" in
-        let _ = Llvm.print_module "out.ll" main_module in
-        ()
-      with Not_found -> raise Not_found
-(* 
-    method create_function args_type = 
-      let args_type_list = List.map (fun ty -> 
-      match ty with
-      | Common.Identifier ident -> (match ident with 
-        | "i32" -> llvm_i32
-        | "i8" -> llvm_i8
-        (*Memory safety should be a priority. This wont exist in future verrsions*)
-        | "String" -> (try
-            let string_ty = Hashtbl.find custom_types "string" in
-              string_ty
-          with Not_found -> raise Not_found)
-        | _ -> raise UndefinedType)
-      | _ -> raise ExpecctedDifferentType
-      ) args_type in
-      try
-        let string_ty = Hashtbl.find custom_types "string" in
-        let main_module = Hashtbl.find mods "main" in
-        let function_ty = Llvm.function_type string_ty (Array.of_list args_type_list) in
-        let func_fn = Llvm.declare_function "main" function_ty main_module in
-        let _ = Llvm.append_block context "entry" func_fn in 
-        let _ = Llvm.print_module "out.ll" main_module in
-        ()
-      with Not_found -> raise Not_found *)
-
+      
+    method parse_definition = function
+      | Common.Expr (Common.Definition { 
+        d_name: string;
+        d_type_list: Common.expression list;
+        d_body: Common.expression; 
+      } ) -> let named_args = List.filter (fun x -> (match x with
+          | Common.DefinitionTypeListItem {
+            ident: Common.expression option;
+            _type: string;
+          } -> Option.is_some ident
+          | _ -> failwith "Somehow, this slipped in... it probably isnt handled rightnow"
+        )) d_type_list in
+          let num_of_named_args = List.length named_args in
+          let num_of_other_args = (List.length d_type_list) - num_of_named_args in
+          if num_of_other_args > 1 then
+            failwith "Too many unnamed args..."
+          else
+            print_endline (Common.show_expression d_body)
+      | _ -> ()
 
     (*
     
@@ -203,15 +130,5 @@ module LLVMFront = struct
   let _ = Llvm.define_global "random_struct" const_struct_value main_module in
     
     *)
-(* 
-    method handle_definition ( def : Common.expression ) =
-      match def with
-        | Common.Definition d_data -> 
-          if List.length d_data.d_type_list > 1 then
-            let _ = self#create_function d_data.d_type_list in
-            Ok "hi"
-          else
-            Ok "h2"
-        | _ -> Error ExpecctedDifferentType *)
   end;;
 end

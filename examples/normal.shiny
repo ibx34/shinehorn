@@ -1,1 +1,8 @@
+(* 
+            | This is the only valid identiifer that can be used in the body of this definition
+            | as there is no other definitions in this file
+            |
+            |               | This is the final type of the `print_this` definition *)
 (print_this to_print\String \String => to_print)
+(*                                     | This should match the final type as it's the last expression in this definition. We know it will match because it will inherit the type
+                                       | from the type list during render time*)

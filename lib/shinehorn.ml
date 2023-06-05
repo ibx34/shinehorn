@@ -111,7 +111,6 @@ module LLVMFront = struct
           } -> Option.is_some ident
           | _ -> failwith "Somehow, this slipped in... it probably isnt handled rightnow"
         )) d_type_list in
-          let num_of_named_args = List.length named_args in
           (*We need to walk the body of the expression and check for it's type. this can be done by making a generalized parse fn that returns the wrapped type *type from above*)
           print_endline (Common.show_expression d_body)
       | _ -> ()

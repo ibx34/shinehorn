@@ -59,7 +59,12 @@ module LLVMFront = struct
     to handle the definitionn of functions and first class citizens:)*)
   type type_wrappers = 
   Llvm of Llvm.lltype
-  | Fn of { name: string; args: type_wrappers list option; ret: type_wrappers option; body: Common.expression}
+  | Fn of { 
+    name: string; 
+    args: type_wrappers list option; 
+    final_ty: type_wrappers option; 
+    supposed_final_ty: type_wrappers option; 
+    body: Common.expression}
 
   (*Should i have my own object type for containing stuff? I dont know right now...*) 
   class llvm input = object (self)
